@@ -1,0 +1,60 @@
+# Network Device Inventory
+# =======================
+# Replace with your actual device details.
+
+device_groups:
+  core_routers:
+    platform: cisco_xe
+    description: "Cisco IOS XE Core Routers"
+    devices:
+      - host: 192.168.10.1
+        name: core-rtr-01
+        username: admin
+        # Password stored in environment variable NETDOG_SECRET or ~/.netdog/credentials
+        # Use: python net_watchdog.py --ask-pass for interactive prompt
+        port: 22
+        commands:
+          - show running-config
+          - show ip route
+          - show ip interface brief
+          - show version
+          - show cdp neighbors
+
+      - host: 192.168.10.2
+        name: core-rtr-02
+        username: admin
+        port: 22
+        commands:
+          - show running-config
+          - show ip route
+          - show ip interface brief
+          - show version
+          - show cdp neighbors
+
+  edge_routers:
+    platform: cisco_xe
+    description: "Cisco IOS XE Edge / WAN Routers"
+    devices:
+      - host: 192.168.20.1
+        name: edge-rtr-01
+        username: admin
+        port: 22
+        commands:
+          - show running-config
+          - show ip bgp summary
+          - show ip ospf neighbor
+          - show interfaces
+
+  sdwan_vedges:
+    platform: cisco_viptela
+    description: "Cisco SD-WAN vEdge / cEdge"
+    devices:
+      - host: 10.1.1.1
+        name: vedge-branch-01
+        username: admin
+        port: 22
+        commands:
+          - show running-config
+          - show omp routes
+          - show control connections
+          - show bfd sessions

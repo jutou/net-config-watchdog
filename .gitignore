@@ -1,0 +1,23 @@
+# Credentials
+.netdog/
+
+# Backup & report data (user-generated)
+backups/
+reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
