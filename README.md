@@ -10,7 +10,7 @@ backups. Built for the daily reality of a TAC engineer — not for the SE PowerP
 
 ## Why this exists
 
-I worked Cisco TAC for 7 years. Every day I needed:
+Every day in a TAC role you need:
 
 - A quick "what changed on this device since yesterday"
 - Reliable config snapshots before making changes
@@ -109,4 +109,4 @@ net-config-watchdog/
 
 ---
 
-*Built by a former Cisco TAC engineer, for network engineers who need answers fast.*
+*Built for network engineers who need answers fast.*
