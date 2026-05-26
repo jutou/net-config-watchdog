@@ -68,7 +68,7 @@ def run_backup(args):
     failed = 0
 
     for dev in devices:
-        print(f"  → {dev['name']} ({dev['host']}) ... ", end="", flush=True)
+        print(f"  -> {dev['name']} ({dev['host']}) ... ", end="", flush=True)
         try:
             output = _collect_device_output(dev, ask_pass=args.ask_pass)
             _save_device_output(dev["name"], output)
@@ -154,7 +154,7 @@ def _collect_device_output(dev, ask_pass=False):
 
 
 def _get_password(dev, ask_pass):
-    """Password resolution: env var → credential file → --ask-pass."""
+    """Password resolution: env var -> credential file -> --ask-pass."""
     env_pw = os.environ.get("NETDOG_SECRET")
     if env_pw:
         return env_pw
@@ -194,7 +194,7 @@ def _save_device_output(device_name, output):
     manifest_path = dev_dir / f"{ts}__manifest.txt"
     with open(manifest_path, "w") as f:
         for cmd, path in manifest:
-            f.write(f"{cmd} → {path}\n")
+            f.write(f"{cmd} -> {path}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -247,13 +247,13 @@ def _diff_device(dev):
     latest = manifests[-1]
     previous = manifests[-2]
 
-    # Parse manifests into command → file path mappings
+    # Parse manifests into command -> file path mappings
     def parse_manifest(m_path):
         mapping = {}
         with open(m_path) as f:
             for line in f:
-                if " → " in line:
-                    cmd, path = line.strip().split(" → ", 1)
+                if " -> " in line:
+                    cmd, path = line.strip().split(" -> ", 1)
                     mapping[cmd] = path
         return mapping
 
@@ -342,7 +342,7 @@ def run_report(args):
                 report_lines.append(f"    ⚠  Changes detected!")
                 for cmd, diff in changes:
                     if diff:
-                        report_lines.append(f"      ↳ {cmd}: {len(diff)} lines affected")
+                        report_lines.append(f"      -> {cmd}: {len(diff)} lines affected")
             else:
                 report_lines.append(f"    ✅  No recent changes")
         else:
@@ -436,7 +436,7 @@ ip route 0.0.0.0 0.0.0.0 192.168.1.254
     with open(dev_dir / f"{ts1}__show_ip_route.txt", "w") as f:
         f.write("""Codes: C - connected, S - static, O - OSPF\nC   192.168.1.0/24 is directly connected, GigabitEthernet0/0\nC   10.0.0.0/24 is directly connected, GigabitEthernet0/1\nS   0.0.0.0/0 [1/0] via 192.168.1.254\n""")
     with open(dev_dir / f"{ts1}__manifest.txt", "w") as f:
-        f.write(f"show running-config → {dev_dir}/{ts1}__show_running-config.txt\nshow ip route → {dev_dir}/{ts1}__show_ip_route.txt\n")
+        f.write(f"show running-config -> {dev_dir}/{ts1}__show_running-config.txt\nshow ip route -> {dev_dir}/{ts1}__show_ip_route.txt\n")
 
     # Write "after" backup (with changes!)
     with open(dev_dir / f"{ts2}__show_running-config.txt", "w") as f:
@@ -444,7 +444,7 @@ ip route 0.0.0.0 0.0.0.0 192.168.1.254
     with open(dev_dir / f"{ts2}__show_ip_route.txt", "w") as f:
         f.write("""Codes: C - connected, S - static, O - OSPF\nC   192.168.1.0/24 is directly connected, GigabitEthernet0/0\nC   10.0.0.0/24 is directly connected, GigabitEthernet0/1\nC   172.16.0.0/24 is directly connected, GigabitEthernet0/2\nS   0.0.0.0/0 [1/0] via 192.168.1.254\n""")
     with open(dev_dir / f"{ts2}__manifest.txt", "w") as f:
-        f.write(f"show running-config → {dev_dir}/{ts2}__show_running-config.txt\nshow ip route → {dev_dir}/{ts2}__show_ip_route.txt\n")
+        f.write(f"show running-config -> {dev_dir}/{ts2}__show_running-config.txt\nshow ip route -> {dev_dir}/{ts2}__show_ip_route.txt\n")
 
     print(f"  ✅  core-rtr-01: 2 snapshots created (1 change injected)")
 
@@ -453,12 +453,12 @@ ip route 0.0.0.0 0.0.0.0 192.168.1.254
     with open(dev_dir2 / f"{ts1}__show_running-config.txt", "w") as f:
         f.write("""!\n! Running config — edge-rtr-01\n!\nhostname edge-rtr-01\n!\ninterface GigabitEthernet0/0\n ip address 10.0.1.1 255.255.255.0\n no shutdown\n!\nrouter bgp 65000\n neighbor 10.0.1.254 remote-as 65001\n!\n""")
     with open(dev_dir2 / f"{ts1}__manifest.txt", "w") as f:
-        f.write(f"show running-config → {dev_dir2}/{ts1}__show_running-config.txt\n")
+        f.write(f"show running-config -> {dev_dir2}/{ts1}__show_running-config.txt\n")
 
     with open(dev_dir2 / f"{ts2}__show_running-config.txt", "w") as f:
         f.write("""!\n! Running config — edge-rtr-01\n!\nhostname edge-rtr-01\n!\ninterface GigabitEthernet0/0\n ip address 10.0.1.1 255.255.255.0\n no shutdown\n!\nrouter bgp 65000\n neighbor 10.0.1.254 remote-as 65001\n!\n""")
     with open(dev_dir2 / f"{ts2}__manifest.txt", "w") as f:
-        f.write(f"show running-config → {dev_dir2}/{ts2}__show_running-config.txt\n")
+        f.write(f"show running-config -> {dev_dir2}/{ts2}__show_running-config.txt\n")
 
     print(f"  ✅  edge-rtr-01: 2 snapshots created (no changes)")
     print()
@@ -484,10 +484,10 @@ ip route 0.0.0.0 0.0.0.0 192.168.1.254
     print("    4. edge-rtr-01 showed 'no changes'")
     print()
     print("  Next steps:")
-    print("    $ python net_watchdog.py report    → Full summary")
-    print("    $ pip install netmiko pyyaml       → Install deps for real use")
-    print("    $ edit inventory.yaml              → Add your real devices")
-    print("    $ python net_watchdog.py backup    → Backup for real")
+    print("    $ python net_watchdog.py report    -> Full summary")
+    print("    $ pip install netmiko pyyaml       -> Install deps for real use")
+    print("    $ edit inventory.yaml              -> Add your real devices")
+    print("    $ python net_watchdog.py backup    -> Backup for real")
     print()
     print("  Clean up demo data:")
     print("    $ rm -rf backups/")
