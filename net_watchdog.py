@@ -10,15 +10,20 @@ A tool for Network TAC engineers to:
 Designed for real-world TAC workflows: simple, focused, no vendor lock-in.
 
 Usage:
-  python net_watchdog.py backup              Backup all devices
+  python net_watchdog.py backup              Backup all devices (auto-prompts for password if needed)
   python net_watchdog.py backup --device X   Backup a single device
   python net_watchdog.py diff                Show changes since last backup
   python net_watchdog.py diff --device X     Changes for one device
   python net_watchdog.py report              Generate summary report
-  python net_watchdog.py --ask-pass backup   Prompt for password (one-time)
-  python net_watchdog.py --ask-pass --save-pass backup   Save password for future use
+  python net_watchdog.py --ask-pass backup   Explicitly prompt for password
   python net_watchdog.py --demo              Simulate a backup cycle (no real devices needed)
   python net_watchdog.py --check-deps        Verify dependencies
+
+Password handling (priority order):
+  1. NETDOG_SECRET environment variable
+  2. ~/.netdog/credentials file (auto-saved on first prompt)
+  3. Interactive prompt (auto-triggered in terminal)
+  4. Device 'password' field in inventory.yaml (not recommended)
 """
 
 import argparse
@@ -141,16 +146,25 @@ def _collect_device_output(dev, ask_pass=False, save_pass=False):
 
     password = _get_password(dev, ask_pass, save_pass=save_pass)
 
-    connection = ConnectHandler(
-        device_type=dev.get("platform", "cisco_xe"),
-        host=dev["host"],
-        port=dev.get("port", 22),
-        username=dev["username"],
-        password=password,
-        secret=password,  # enable password fallback
-        global_delay_factor=dev.get("delay_factor", 1),
-        timeout=dev.get("timeout", 30),
-    )
+    if not password:
+        raise Exception("No password available. Use --ask-pass or set NETDOG_SECRET.")
+
+    try:
+        connection = ConnectHandler(
+            device_type=dev.get("platform", "cisco_xe"),
+            host=dev["host"],
+            port=dev.get("port", 22),
+            username=dev["username"],
+            password=password,
+            secret=password,  # enable password fallback
+            global_delay_factor=dev.get("delay_factor", 1),
+            timeout=dev.get("timeout", 30),
+        )
+    except Exception as e:
+        err_str = str(e).lower()
+        if "authentication" in err_str or "auth" in err_str or "password" in err_str or "permission denied" in err_str:
+            raise Exception(f"Authentication failed for {dev['name']}. Wrong or missing password. Run with --ask-pass to update.")
+        raise
 
     connection.enable()
 
@@ -162,8 +176,15 @@ def _collect_device_output(dev, ask_pass=False, save_pass=False):
     return collected
 
 
-def _get_password(dev, ask_pass, save_pass=False):
-    """Password resolution: env var -> credential file -> --ask-pass."""
+def _get_password(dev, ask_pass=False, save_pass=False):
+    """Password resolution: env var -> credential file -> interactive prompt.
+
+    Priority:
+      1. NETDOG_SECRET env var
+      2. ~/.netdog/credentials (persisted password)
+      3. Interactive prompt (auto-detected if terminal is a TTY)
+      4. device entry 'password' field (fallback, not recommended)
+    """
     env_pw = os.environ.get("NETDOG_SECRET")
     if env_pw:
         return env_pw
@@ -173,22 +194,31 @@ def _get_password(dev, ask_pass, save_pass=False):
         with open(cred_file) as f:
             return f.read().strip()
 
-    if ask_pass:
+    # Auto-prompt if terminal is interactive (no --ask-pass needed)
+    if ask_pass or sys.stdin.isatty():
         try:
             import getpass
             pw = getpass.getpass(f"  Password for {dev['name']} ({dev['host']}): ")
-            if save_pass and pw:
+            if pw:
+                # Auto-save if prompted interactively (no --save-pass needed)
                 cred_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(cred_file, "w") as f:
                     f.write(pw.strip())
                 os.chmod(cred_file, 0o600)
                 print(f"  (Password saved to {cred_file})")
-            return pw
+                return pw
         except Exception:
             pass
 
     # Fallback: use device entry password if specified (not recommended for prod)
-    return dev.get("password", "")
+    pw = dev.get("password", "")
+    if not pw:
+        print(f"  ⚠  No password available for {dev['name']}.", file=sys.stderr)
+        print(f"     Options:", file=sys.stderr)
+        print(f"       Set NETDOG_SECRET env var", file=sys.stderr)
+        print(f"       Run '--ask-pass --save-pass' once to persist password", file=sys.stderr)
+        print(f"       Or run in an interactive terminal for auto-prompt", file=sys.stderr)
+    return pw
 
 
 def _save_device_output(device_name, output):
@@ -517,15 +547,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Examples:
-              python net_watchdog.py backup                Backup all devices
+              python net_watchdog.py backup                Backup all devices (auto-prompt for password)
               python net_watchdog.py backup --device X     Backup one device
               python net_watchdog.py diff                  Show changes
               python net_watchdog.py report                Summary report
-              python net_watchdog.py --ask-pass backup     Prompt for passwords
+              python net_watchdog.py --ask-pass backup     Force password prompt
+              python net_watchdog.py --demo                Run demo (no devices needed)
+
+            Password priority:
+              NETDOG_SECRET env var  >  ~/.netdog/credentials  >  interactive prompt  >  inventory.yaml
         """),
     )
-    parser.add_argument("--ask-pass", action="store_true", help="Prompt for passwords")
-    parser.add_argument("--save-pass", action="store_true", help="Save password from --ask-pass to ~/.netdog/credentials")
+    parser.add_argument("--ask-pass", action="store_true", help="Force password prompt (auto-triggered in terminal)")
+    parser.add_argument("--save-pass", action="store_true", help="(Deprecated — passwords auto-save on interactive prompt)")
     parser.add_argument("--device", help="Target a single device by name")
     parser.add_argument("--check-deps", action="store_true", help="Check dependencies")
     parser.add_argument("--demo", action="store_true", help="Run demo cycle (no real devices)")

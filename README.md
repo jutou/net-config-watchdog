@@ -27,9 +27,8 @@ well: **back up, diff, report.**
 pip install netmiko pyyaml rich
 
 # 2. Edit inventory.yaml with your device details
-#    (see inventory.yaml.example)
 
-# 3. Run a backup
+# 3. Run a backup (auto-prompts for password on first run)
 python net_watchdog.py backup
 
 # 4. See what changed after a maintenance window
@@ -37,6 +36,9 @@ python net_watchdog.py diff
 
 # 5. Generate a summary report
 python net_watchdog.py report
+
+# Try the demo if you don't have real devices handy
+python net_watchdog.py --demo
 ```
 
 ## Commands
@@ -46,11 +48,25 @@ python net_watchdog.py report
 | `backup` | SSH into devices, collect configs + show commands, save timestamped snapshots |
 | `diff` | Compare latest two snapshots, highlight changes (green/red terminal output) |
 | `report` | Generate a summary overview: backup counts, change status per device |
+| `--demo` | Run a simulated backup cycle with sample data — no real devices needed |
 
 Options:
 - `--device RTR-01` — target a single device by its inventory name
-- `--ask-pass` — prompt for passwords (don't store them in files)
+- `--ask-pass` — force password prompt (normally auto-triggered in terminal)
 - `--check-deps` — verify all dependencies are installed
+
+## Password handling
+
+Passwords are resolved in this priority:
+
+1. `NETDOG_SECRET` environment variable
+2. `~/.netdog/credentials` file (automatically created on first use, chmod 600)
+3. Interactive prompt (auto-triggered if running in a terminal)
+4. `password` field in inventory.yaml (not recommended)
+
+No need to pass `--ask-pass` every time — just run `backup` and it will prompt
+for the password on first run, save it to `~/.netdog/credentials`, and reuse it
+on subsequent runs.
 
 ## Example workflow
 
@@ -77,16 +93,14 @@ python net_watchdog.py diff --device core-rtr-01
 
 ```
 net-config-watchdog/
-├── net_watchdog.py      # Main tool (single file, ~400 lines)
+├── net_watchdog.py      # Main tool (single file, ~600 lines)
 ├── inventory.yaml        # Your device inventory (edit this)
 ├── requirements.txt      # Python dependencies
 ├── backups/              # Timestamped config snapshots (auto-created)
 │   ├── core-rtr-01/
-│   │   ├── 20260526_091500__show_running-config.txt
-│   │   └── 20260526_091500__show_ip_route.txt
-│   └── edge-rtr-01/
+│   ├── edge-rtr-01/
+│   └── vedge-branch-01/
 ├── reports/              # Generated reports (auto-created)
-│   └── report_2026-05-26.txt
 └── README.md
 ```
 
@@ -94,8 +108,8 @@ net-config-watchdog/
 
 - **Passwords never stored in inventory.yaml.** Use one of:
   1. `NETDOG_SECRET` environment variable (preferred)
-  2. `~/.netdog/credentials` file (chmod 600)
-  3. `--ask-pass` flag (interactive prompt)
+  2. `~/.netdog/credentials` file (auto-created, chmod 600)
+  3. Interactive prompt (auto-triggered in terminal)
 - No cloud, no telemetry, no vendor calls home.
 
 ## Roadmap / Nice-to-haves
