@@ -15,9 +15,10 @@ Usage:
   python net_watchdog.py diff                Show changes since last backup
   python net_watchdog.py diff --device X     Changes for one device
   python net_watchdog.py report              Generate summary report
+  python net_watchdog.py --ask-pass backup   Prompt for password (one-time)
+  python net_watchdog.py --ask-pass --save-pass backup   Save password for future use
   python net_watchdog.py --demo              Simulate a backup cycle (no real devices needed)
   python net_watchdog.py --check-deps        Verify dependencies
-  python net_watchdog.py --ask-pass          Prompt for passwords
 """
 
 import argparse
@@ -70,7 +71,7 @@ def run_backup(args):
     for dev in devices:
         print(f"  -> {dev['name']} ({dev['host']}) ... ", end="", flush=True)
         try:
-            output = _collect_device_output(dev, ask_pass=args.ask_pass)
+            output = _collect_device_output(dev, ask_pass=args.ask_pass, save_pass=args.save_pass)
             _save_device_output(dev["name"], output)
             print("✅")
             success += 1
@@ -80,10 +81,18 @@ def run_backup(args):
 
     print(f"\nDone: {success} succeeded, {failed} failed.")
 
-    # Also generate a short diff report after backup for convenience
-    if success and not args.device:
+    # Count total backups to know if we can diff
+    total_snapshots = 0
+    for dev in devices:
+        dev_dir = device_backup_path(dev["name"])
+        total_snapshots += len(list(dev_dir.glob("*__manifest.txt")))
+    backup_count = total_snapshots // len(devices) if devices else 0
+
+    if success and backup_count >= 2:
         print("\n--- Quick change summary ---")
         _run_diff(args, quiet=True)
+    elif success and backup_count == 1 and not args.device:
+        print("\n  (First backup complete. Run again to detect changes.)")
 
 
 def _load_inventory():
@@ -122,7 +131,7 @@ def _resolve_devices(inventory, device_name=None):
     return inventory
 
 
-def _collect_device_output(dev, ask_pass=False):
+def _collect_device_output(dev, ask_pass=False, save_pass=False):
     """Connect via Netmiko, collect configured show commands."""
     try:
         from netmiko import ConnectHandler
@@ -130,7 +139,7 @@ def _collect_device_output(dev, ask_pass=False):
         print("❌  Netmiko not installed. Run: pip install netmiko")
         sys.exit(1)
 
-    password = _get_password(dev, ask_pass)
+    password = _get_password(dev, ask_pass, save_pass=save_pass)
 
     connection = ConnectHandler(
         device_type=dev.get("platform", "cisco_xe"),
@@ -153,7 +162,7 @@ def _collect_device_output(dev, ask_pass=False):
     return collected
 
 
-def _get_password(dev, ask_pass):
+def _get_password(dev, ask_pass, save_pass=False):
     """Password resolution: env var -> credential file -> --ask-pass."""
     env_pw = os.environ.get("NETDOG_SECRET")
     if env_pw:
@@ -167,7 +176,14 @@ def _get_password(dev, ask_pass):
     if ask_pass:
         try:
             import getpass
-            return getpass.getpass(f"  Password for {dev['name']} ({dev['host']}): ")
+            pw = getpass.getpass(f"  Password for {dev['name']} ({dev['host']}): ")
+            if save_pass and pw:
+                cred_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(cred_file, "w") as f:
+                    f.write(pw.strip())
+                os.chmod(cred_file, 0o600)
+                print(f"  (Password saved to {cred_file})")
+            return pw
         except Exception:
             pass
 
@@ -509,6 +525,7 @@ def main():
         """),
     )
     parser.add_argument("--ask-pass", action="store_true", help="Prompt for passwords")
+    parser.add_argument("--save-pass", action="store_true", help="Save password from --ask-pass to ~/.netdog/credentials")
     parser.add_argument("--device", help="Target a single device by name")
     parser.add_argument("--check-deps", action="store_true", help="Check dependencies")
     parser.add_argument("--demo", action="store_true", help="Run demo cycle (no real devices)")
